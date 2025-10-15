@@ -1,1 +1,125 @@
+# Default Configuration for Preterm Infant Pose Estimation
 
+# Model Configuration
+MODEL:
+  NAME: 'pose_hrnet'
+  NUM_JOINTS: 13
+  IMAGE_SIZE: [256, 256]      # [width, height]
+  HEATMAP_SIZE: [64, 64]      # [width, height]
+  SIGMA: 2                     # Gaussian kernel sigma for heatmap generation
+  FUSED_HEAD: true             # Enable fused head (heatmap + regression)
+  PRETRAINED: ''               # Path to pretrained weights
+  
+  # HRNet specific parameters
+  EXTRA:
+    STAGE2:
+      NUM_MODULES: 1
+      NUM_BRANCHES: 2
+      NUM_BLOCKS: [4, 4]
+      NUM_CHANNELS: [32, 64]
+    STAGE3:
+      NUM_MODULES: 4
+      NUM_BRANCHES: 3
+      NUM_BLOCKS: [4, 4, 4]
+      NUM_CHANNELS: [32, 64, 128]
+    STAGE4:
+      NUM_MODULES: 3
+      NUM_BRANCHES: 4
+      NUM_BLOCKS: [4, 4, 4, 4]
+      NUM_CHANNELS: [32, 64, 128, 256]
+
+# Loss Configuration
+LOSS:
+  MORPH_WEIGHT: 0.1           # Weight for morphology-aware loss (key innovation)
+  MORPH_LAMBDA: 1.0           # Lambda for spatial variance constraint
+  REG_WEIGHT: 0.5             # Weight for regression loss
+  USE_TARGET_WEIGHT: true     # Use visibility weights in loss computation
+
+# Training Configuration
+TRAIN:
+  BATCH_SIZE: 32
+  EPOCHS: 200
+  LR: 0.001                   # Initial learning rate
+  WEIGHT_DECAY: 0.0001
+  MOMENTUM: 0.9
+  NESTEROV: true
+  GAMMA1: 0.99                # LR decay factor
+  GAMMA2: 0.0
+  
+  # Learning rate schedule
+  LR_SCHEDULER: 'cosine'      # Options: 'cosine', 'step', 'multistep'
+  LR_STEP: [90, 120]          # For step scheduler
+  LR_FACTOR: 0.1              # LR reduction factor
+  
+  # Training loop
+  BEGIN_EPOCH: 0
+  END_EPOCH: 200
+  VAL_INTERVAL: 5             # Validate every N epochs
+  SAVE_INTERVAL: 10           # Save checkpoint every N epochs
+  PRINT_FREQ: 100             # Print frequency (batches)
+  
+  # Data loading
+  NUM_WORKERS: 4
+  SHUFFLE: true
+  PIN_MEMORY: true
+
+# Testing Configuration
+TEST:
+  BATCH_SIZE: 16
+  NUM_WORKERS: 4
+  FLIP_TEST: false            # Horizontal flip augmentation during test
+  FUSION_ALPHA: 0.5           # Fusion weight for combining heatmap and regression
+  NMS_THRESHOLD: 5.0          # NMS threshold for duplicate removal
+  CONF_THRESHOLD: 0.3         # Confidence threshold for filtering
+  
+  # Post-processing
+  POST_PROCESS: true
+  SHIFT_HEATMAP: true         # Shift heatmap for better localization
+  USE_GT_BBOX: false          # Use ground truth bounding box (for debugging)
+
+# Data Configuration
+DATA:
+  DATA_DIR: './data'
+  NUM_JOINTS: 13
+  
+  # Data augmentation
+  FLIP: true                  # Random horizontal flip
+  ROT_FACTOR: 30              # Rotation range [-ROT_FACTOR, ROT_FACTOR]
+  SCALE_FACTOR: 0.25          # Scale range [1-SCALE_FACTOR, 1+SCALE_FACTOR]
+  COLOR_RGB: true
+  
+  # Image preprocessing
+  MEAN: [0.485, 0.456, 0.406]
+  STD: [0.229, 0.224, 0.225]
+  
+  # Target generation
+  TARGET_TYPE: 'gaussian'     # Heatmap type: 'gaussian'
+  SIGMA: 2                    # Gaussian kernel sigma
+
+# Output Configuration
+OUTPUT_DIR: './outputs'
+LOG_DIR: './logs'
+VIS_DIR: './visualizations'
+
+# Experiment Configuration
+EXPERIMENT:
+  NAME: 'default'
+  VERSION: '1.0'
+  DESCRIPTION: 'Default configuration for preterm infant pose estimation'
+
+# Evaluation Configuration
+EVAL:
+  METRICS: ['AP', 'PCK']      # Metrics to compute
+  PCK_THRESHOLD: 0.2          # PCK threshold
+  OKS_THRESHOLD: 0.5          # OKS threshold for AP
+  SAVE_PREDICTIONS: true      # Save predictions to file
+
+# Miscellaneous
+CUDNN:
+  BENCHMARK: true
+  DETERMINISTIC: false
+  ENABLED: true
+
+WORKERS: 4
+PRINT_FREQ: 100
+SAVE_CHECKPOINT: true

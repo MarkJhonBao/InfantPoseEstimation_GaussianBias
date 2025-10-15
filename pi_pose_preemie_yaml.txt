@@ -1,0 +1,145 @@
+# Optimized Configuration for Preterm Infant Characteristics
+# This configuration is specifically tuned for:
+# - Small body sizes
+# - Subtle limb movements
+# - Low-frequency motions
+# - NICU environment conditions
+
+# Model Configuration
+MODEL:
+  NAME: 'pose_hrnet_w32'
+  NUM_JOINTS: 13
+  IMAGE_SIZE: [256, 256]
+  HEATMAP_SIZE: [128, 128]    # Higher resolution for small infants
+  SIGMA: 1.5                   # Smaller sigma for tiny keypoints
+  FUSED_HEAD: true
+  PRETRAINED: ''
+
+# Loss Configuration - Enhanced for unstable movements
+LOSS:
+  MORPH_WEIGHT: 0.15          # Increased weight for morphology constraint
+  MORPH_LAMBDA: 1.2           # Stronger spatial variance enforcement
+  REG_WEIGHT: 0.6             # Higher regression weight for subtle motions
+  USE_TARGET_WEIGHT: true
+
+# Training Configuration
+TRAIN:
+  BATCH_SIZE: 24              # Adjusted for higher resolution
+  EPOCHS: 250                 # Longer training for fine details
+  LR: 0.0005                  # Lower LR for stable convergence
+  WEIGHT_DECAY: 0.0001
+  
+  LR_SCHEDULER: 'cosine'
+  
+  BEGIN_EPOCH: 0
+  END_EPOCH: 250
+  VAL_INTERVAL: 5
+  SAVE_INTERVAL: 10
+  PRINT_FREQ: 50
+  
+  NUM_WORKERS: 6
+  SHUFFLE: true
+  PIN_MEMORY: true
+
+# Testing Configuration
+TEST:
+  BATCH_SIZE: 16
+  NUM_WORKERS: 4
+  FLIP_TEST: false
+  FUSION_ALPHA: 0.4           # More weight on regression for subtle motions
+  NMS_THRESHOLD: 3.0          # Tighter NMS for small body parts
+  CONF_THRESHOLD: 0.25        # Lower threshold for subtle movements
+  
+  POST_PROCESS: true
+  SHIFT_HEATMAP: true
+  USE_GT_BBOX: false
+
+# Data Configuration - Adjusted for NICU environment
+DATA:
+  DATA_DIR: './data'
+  NUM_JOINTS: 13
+  
+  # Conservative augmentation for supine infants
+  FLIP: true
+  ROT_FACTOR: 15              # Less rotation (infants usually supine)
+  SCALE_FACTOR: 0.15          # Less scale variation
+  COLOR_RGB: true
+  
+  # Brightness/contrast adjusted for NICU lighting
+  COLOR_JITTER:
+    BRIGHTNESS: 0.3
+    CONTRAST: 0.3
+    SATURATION: 0.2
+  
+  MEAN: [0.485, 0.456, 0.406]
+  STD: [0.229, 0.224, 0.225]
+  
+  TARGET_TYPE: 'gaussian'
+  SIGMA: 1.5                  # Match model sigma
+
+# Output Configuration
+OUTPUT_DIR: './outputs/preemie_optimized'
+LOG_DIR: './logs/preemie_optimized'
+VIS_DIR: './visualizations/preemie_optimized'
+
+# Experiment Configuration
+EXPERIMENT:
+  NAME: 'preemie_optimized'
+  VERSION: '1.0'
+  DESCRIPTION: 'Optimized configuration for preterm infant pose estimation'
+
+# Evaluation Configuration
+EVAL:
+  METRICS: ['AP', 'PCK', 'temporal_consistency']
+  PCK_THRESHOLD: 0.2
+  OKS_THRESHOLD: 0.5
+  SAVE_PREDICTIONS: true
+  
+  # Preterm-specific evaluation
+  EVALUATE_MOVEMENT_AMPLITUDE: true
+  EVALUATE_TEMPORAL_SMOOTHNESS: true
+  MIN_KEYPOINT_VISIBILITY: 0.3
+
+# Temporal Processing (for video sequences)
+TEMPORAL:
+  ENABLED: true
+  WINDOW_SIZE: 5              # Frames for temporal smoothing
+  SMOOTHING_METHOD: 'gaussian'
+  
+# Clinical Analysis Settings
+CLINICAL:
+  ENABLE_MOVEMENT_TRACKING: true
+  TRACK_LIMB_AMPLITUDE: true
+  DETECT_ABNORMAL_PATTERNS: false  # Set true after baseline established
+  
+  # Movement thresholds (pixels)
+  MIN_MOVEMENT_THRESHOLD: 5
+  MAX_MOVEMENT_THRESHOLD: 200
+  
+  # Alert conditions
+  ALERT_ON_LOW_MOVEMENT: false
+  ALERT_ON_ASYMMETRY: false
+
+# Miscellaneous
+CUDNN:
+  BENCHMARK: true
+  DETERMINISTIC: false
+  ENABLED: true
+
+WORKERS: 6
+PRINT_FREQ: 50
+SAVE_CHECKPOINT: true
+
+# Advanced Features
+ADVANCED:
+  # Coordinate refinement
+  USE_COORDINATE_REFINEMENT: true
+  REFINEMENT_WINDOW: 5
+  
+  # Multi-scale testing
+  MULTI_SCALE_TEST: false
+  SCALE_LIST: [0.8, 1.0, 1.2]
+  
+  # Post-processing enhancements
+  USE_SUBPIXEL_REFINEMENT: true
+  USE_ADAPTIVE_FUSION: true  # Confidence-based fusion weight

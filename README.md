@@ -290,8 +290,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 📧 Contact
 
 For questions or collaboration:
-- Email: your.email@example.com
-- Issues: [GitHub Issues](https://github.com/yourusername/preterm-infant-pose/issues)
+- Email: baoxf96@163.com
+- Issues: [GitHub Issues](https://github.com/MarkJhonBao/preterm-infant-pose/issues)
 
 ---
 

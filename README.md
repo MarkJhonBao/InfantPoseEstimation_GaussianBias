@@ -8,7 +8,7 @@
 Official implementation of **"Morphology-Aware Pose Estimation with Gaussian Bias Mitigation for Robust Preterm Infant Movements Monitoring"**.
 
 <div align="center">
-  <video src="test.mp4" width="800" controls></video>
+  <video src="example/test.mp4" width="800" controls></video>
   <p><i>Demo: Real-time preterm infant pose estimation in NICU environment</i></p>
 </div>
 

@@ -14,7 +14,7 @@ Official implementation of **"Morphology-Aware Pose Estimation with Gaussian Bia
 
 ## 👥 Authors
 
-**Xianfu Bao**¹ · **Hyunsoo Shin**² · **Hyunho Hwang**³ · **Huafei Huang**⁴ · **Peng Lin**⁵ · **Jiuwen Cao**¹* · **Sungon Lee**²*
+**Xianfu Bao**¹ · **Hyunsoo Shin**² · **Hyunho Hwang**2 · **Huafei Huang**2 · **Peng Lin**2 · **Jiuwen Cao**¹* · **Sungon Lee**²*
 
 ¹ Artificial Intelligent Institute, Hangzhou Dianzi University, China  
 ² Department of Electrical and Electronic Engineering, Hanyang University, South Korea  

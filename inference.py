@@ -200,7 +200,11 @@ class PoseInference:
             )
         else:
             outputs = self.model(input_tensor)
-            keypoints, scores = self.model.decode_heatmaps(outputs['heatmaps'])
+            # Check if model has fusion head
+            if hasattr(self.model, 'head') and hasattr(self.model.head, 'decode'):
+                keypoints, scores = self.model.head.decode(outputs, apply_offset=True)
+            else:
+                keypoints, scores = self.model.decode_heatmaps(outputs['heatmaps'])
         
         keypoints = keypoints[0].cpu().numpy()
         scores = scores[0].cpu().numpy()

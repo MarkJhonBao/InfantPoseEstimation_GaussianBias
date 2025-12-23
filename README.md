@@ -1,318 +1,263 @@
-# Morphology-Aware Pose Estimation for Preterm Infant Monitoring
+# Human Pose Estimation
 
-[![arXiv](https://img.shields.io/badge/arXiv-2025.xxxxx-b31b1b.svg)](https://arxiv.org/abs/)
-[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
-[![PyTorch](https://img.shields.io/badge/PyTorch-1.10+-ee4c2c.svg)](https://pytorch.org/)
+A PyTorch implementation of top-down human pose estimation based on HRFormer (High-Resolution Transformer) architecture.
 
-Official implementation of **"Morphology-Aware Pose Estimation with Gaussian Bias Mitigation for Robust Preterm Infant Movements Monitoring"**.
+## Project Structure
 
-<div align="center">
-  <img src="./examples/test.gif" width="800" height="600">
-  <p><i>Demo: Real-time preterm infant pose estimation in NICU environment</i></p>
-</div>
-
-## 👥 Authors
-
-**Xianfu Bao**¹ · **Hyunsoo Shin**² · **Hyunho Hwang**² · **Huafei Huang**² · **Peng Lin**¹ · **Jiuwen Cao**¹* · **Sungon Lee**²*
-
-¹ Artificial Intelligent Institute, Hangzhou Dianzi University, China  
-² Department of Electrical and Electronic Engineering, Hanyang University, South Korea  
-³ Division of Neonatology, Jiaxing Maternity and Child Health Care Hospital, China  
-⁴ Machine Learning and I-health International Cooperation Base of Zhejiang Province, China  
-⁵ Department of Robotics, Hanyang University, South Korea
-
-*Corresponding authors
-
-## 📄 Abstract
-
-Preterm infants are at higher risk for movement dysfunction and neuro-developmental disorders due to organ developmental immaturity and nervous system issues in neonatal intensive care units (NICUs). Objective preterm infant limb movement recognition (PI-LMR) is considered essential for timely clinical care and disease screening. However, current Gaussian heatmap-based human pose estimation algorithms are affected by pixel downsampling and peak drift of Gaussian bias, resulting in detection curve fluctuations.
-
-This work proposes a non-contact vision-based pose estimation framework combining fused head and morphological loss to monitor premature infants' pose movements continuously. To address unstable limb movements and indistinct postures exhibited by preterm infants, which cause movement trajectories to be highly affected by noise interference, we improve the top-down paradigm to eliminate coordinate deviations caused by feature map downsampling and Gaussian bias errors.
-
-**Key innovations include:**
-- A post-processing fusion strategy combining heatmap-based and regression-based representations for enhanced scale robustness
-- A morphology-aware shape constraint loss enforcing distribution consistency by penalizing spatial variance discrepancies
-- A coordinate correspondence refinement mechanism jointly optimizing heatmap localization and regressed keypoints
-
-Extensive experiments demonstrate accurate and robust pose estimation for NICUs, enabling early abnormal posture screening with **95.4% accuracy** validated on Infant-Skeleton-V2 data.
-
-## 📋 Overview
-
-This repository presents a non-contact vision-based framework for accurate and robust pose estimation of preterm infants in Neonatal Intensive Care Units (NICUs). Our method addresses critical challenges in preterm infant limb movement recognition (PI-LMR) through novel approaches to Gaussian bias mitigation and morphology-aware optimization.
-
-### Key Features
-
-- **🎯 Gaussian Bias Mitigation**: Eliminates coordinate deviations caused by feature map downsampling and Gaussian peak shifts
-- **🔄 Dual-Branch Architecture**: Combines heatmap-based global spatial perception with regression-based local refinement
-- **📐 Morphology-Aware Loss**: Enforces distribution consistency through spatial variance constraints
-- **🎨 Coordinate Refinement**: Sub-pixel precision through soft-argmax with local Gaussian refinement
-- **⚕️ Clinical Validation**: Achieved 95.4% accuracy on Infant-Skeleton-V2 dataset
-
-## 🏗️ Architecture
-
-Our framework consists of three main components:
-
-1. **Regression-Assisted Feature Fusion Head**
-   - Integrates Gaussian heatmap representation with continuous coordinate regression
-   - Dual-supervision framework for improved localization stability
-
-2. **Morphological Correlation Loss**
-   - Joint optimization of heatmap variance constraints
-   - Decouples receptive field overlap and corrects Gaussian bias
-
-3. **Continuous Coordinate Regression**
-   - Combines soft-argmax with local Gaussian refinement
-   - Achieves sub-pixel precision for enhanced continuity
-
-## 🚀 Installation
-
-### Prerequisites
-
-```bash
-Python >= 3.8
-PyTorch >= 1.10
-CUDA >= 11.0 (for GPU support)
+```
+pose_estimation/
+├── configs/
+│   ├── __init__.py
+│   └── config.py           # Configuration dataclasses
+├── datasets/
+│   ├── __init__.py
+│   ├── coco_dataset.py     # COCO dataset implementation
+│   └── transforms.py       # Data augmentation transforms
+├── models/
+│   ├── __init__.py
+│   ├── hrnet.py            # HRNet backbone (optional)
+│   ├── hrformer.py         # HRFormer backbone (Transformer-based)
+│   └── pose_estimator.py   # Complete pose estimator
+├── utils/
+│   ├── __init__.py
+│   ├── metrics.py          # Evaluation metrics (OKS, AP)
+│   └── visualization.py    # Visualization utilities
+├── train.py                # Training script
+├── validate.py             # Validation script
+├── inference.py            # Inference script
+├── requirements.txt        # Dependencies
+└── README.md               # This file
 ```
 
-### Setup
+## Installation
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/preterm-infant-pose-estimation.git
-cd preterm-infant-pose-estimation
+git clone <repository_url>
+cd pose_estimation
 
 # Create virtual environment
-conda create -n infant_pose python=3.8
-conda activate infant_pose
+python -m venv venv
+source venv/bin/activate  # Linux/Mac
+# or
+venv\Scripts\activate  # Windows
 
 # Install dependencies
 pip install -r requirements.txt
-
-# Install the package
-pip install -e .
 ```
 
-### Dependencies
+## Data Preparation
 
-```bash
-torch>=1.10.0
-torchvision>=0.11.0
-numpy>=1.21.0
-opencv-python>=4.5.0
-scipy>=1.7.0
-matplotlib>=3.4.0
-tensorboard>=2.7.0
-pycocotools>=2.0.0
-```
+### COCO Dataset
 
-## 📊 Dataset
+1. Download COCO 2017 dataset:
+   - [train2017](http://images.cocodataset.org/zips/train2017.zip)
+   - [val2017](http://images.cocodataset.org/zips/val2017.zip)
+   - [annotations](http://images.cocodataset.org/annotations/annotations_trainval2017.zip)
 
-The model is validated on **Infant-Skeleton-V2** dataset collected at Jiaxing Maternity and Child Health Hospital.
-
-### Data Structure
-
+2. Organize the data:
 ```
 data/
-├── images/
-│   ├── train/
-│   ├── val/
-│   └── test/
-└── annotations/
-    ├── train.json
-    ├── val.json
-    └── test.json
+└── coco/
+    ├── annotations/
+    │   ├── person_keypoints_train2017.json
+    │   └── person_keypoints_val2017.json
+    ├── train2017/
+    │   ├── 000000000001.jpg
+    │   └── ...
+    └── val2017/
+        ├── 000000000139.jpg
+        └── ...
 ```
 
-### Data Preparation
+## Usage
+
+### Training
 
 ```bash
-# Download and prepare the dataset
-python tools/prepare_data.py --data-dir ./data
+# Basic training
+python train.py --data_root data/coco/
 
-# Verify dataset integrity
-python tools/verify_data.py --data-dir ./data
-```
-
-## 🏋️ Training
-
-### Quick Start
-
-```bash
-# Train with default configuration
-python train.py --config configs/default.yaml
-
-# Train with custom settings
+# Training with custom parameters
 python train.py \
-    --config configs/custom.yaml \
-    --batch-size 32 \
-    --epochs 100 \
-    --lr 0.001
+    --data_root data/coco/ \
+    --batch_size 32 \
+    --epochs 210 \
+    --lr 5e-4
+
+# Resume training from checkpoint
+python train.py \
+    --data_root data/coco/ \
+    --resume checkpoints/latest.pth
 ```
 
-### Configuration
-
-Key parameters in `configs/default.yaml`:
-
-```yaml
-model:
-  backbone: hrnet_w32
-  num_keypoints: 17
-  heatmap_size: [64, 64]
-  
-training:
-  batch_size: 32
-  epochs: 100
-  learning_rate: 0.001
-  weight_decay: 0.0001
-  
-loss:
-  heatmap_weight: 1.0
-  regression_weight: 0.5
-  morphology_weight: 0.3
-```
-
-## 🔬 Evaluation
+### Validation
 
 ```bash
-# Evaluate on test set
-python evaluate.py \
-    --config configs/default.yaml \
-    --checkpoint checkpoints/best_model.pth \
-    --data-dir ./data/test
+# Validate with flip test
+python validate.py \
+    --checkpoint checkpoints/best.pth \
+    --data_root data/coco/
 
-# Generate visualization
-python visualize.py \
-    --config configs/default.yaml \
-    --checkpoint checkpoints/best_model.pth \
-    --input-dir ./data/test/images \
-    --output-dir ./results
+# Validate without flip test
+python validate.py \
+    --checkpoint checkpoints/best.pth \
+    --data_root data/coco/ \
+    --no_flip
 ```
 
-## 📈 Results
+### Inference
 
-| Method | AP | AP@50 | AP@75 | Accuracy |
-|--------|-----|-------|-------|----------|
-| Baseline | 82.3 | 94.1 | 87.6 | 89.2% |
-| + Fusion Head | 86.7 | 95.8 | 90.4 | 92.1% |
-| + Morphology Loss | 89.4 | 96.5 | 92.1 | 93.8% |
-| **Ours (Full)** | **92.8** | **97.3** | **94.2** | **95.4%** |
+```bash
+# Single image inference
+python inference.py \
+    --input path/to/image.jpg \
+    --checkpoint checkpoints/best.pth \
+    --output result.jpg
 
-## 🎯 Inference
+# Batch inference on directory
+python inference.py \
+    --input path/to/images/ \
+    --checkpoint checkpoints/best.pth \
+    --output path/to/results/
 
-### Single Image
+# With specific bounding box
+python inference.py \
+    --input path/to/image.jpg \
+    --checkpoint checkpoints/best.pth \
+    --bbox 100 100 300 400 \
+    --verbose
+```
+
+## Configuration
+
+Configuration is managed through dataclasses in `configs/config.py`:
 
 ```python
-from models import PoseEstimator
-from utils import load_image, visualize_pose
+from configs import get_config
 
-# Load model
-model = PoseEstimator(config='configs/default.yaml')
-model.load_checkpoint('checkpoints/best_model.pth')
+cfg = get_config()
 
-# Inference
-image = load_image('path/to/image.jpg')
-keypoints, confidence = model.predict(image)
-
-# Visualize
-visualize_pose(image, keypoints, save_path='output.jpg')
+# Modify settings
+cfg.data.input_size = (256, 192)
+cfg.train.batch_size = 32
+cfg.train.lr = 5e-4
 ```
 
-### Video Processing
+### Key Parameters
 
-```bash
-python demo/video_demo.py \
-    --input video.mp4 \
-    --output output.mp4 \
-    --checkpoint checkpoints/best_model.pth
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `input_size` | (192, 256) | Input image size (W, H) |
+| `heatmap_size` | (48, 64) | Heatmap size (W, H) |
+| `num_keypoints` | 17 | Number of keypoints |
+| `batch_size` | 32 | Training batch size |
+| `lr` | 5e-4 | Learning rate |
+| `max_epochs` | 210 | Maximum training epochs |
+| `sigma` | 2.0 | Gaussian sigma for heatmap |
+| `head_type` | 'fusion' | Head type: 'heatmap' or 'fusion' |
+| `heatmap_loss_weight` | 1.0 | Weight for heatmap loss |
+| `offset_loss_weight` | 1.0 | Weight for offset regression loss |
+| `variance_loss_weight` | 0.1 | Weight for variance alignment loss |
+
+## Model Architecture
+
+### HRFormer Backbone (Default)
+- High-Resolution Transformer architecture
+- Window-based Multi-head Self-Attention (W-MSA)
+- Relative Position Encoding (RPE)
+- Multi-resolution parallel branches with feature fusion
+- Drop Path regularization
+
+### Fusion Head (Heatmap + Regression)
+The fusion head combines heatmap prediction with coordinate regression for improved accuracy:
+
+```
+Shared Features
+     ├── Heatmap Branch → K heatmaps
+     ├── Offset Branch → K×2 offset maps (for quantization error correction)
+     └── Variance Branch → K variance maps (for Gaussian distribution constraint)
 ```
 
-## 📁 Project Structure
+**Key Features:**
+- **Sub-pixel Refinement**: Global Soft-Argmax + Local Gaussian fitting
+- **Offset Regression**: Corrects quantization error (ε_q ≤ √2/2 × s)
+- **Variance Alignment**: Constrains predicted heatmap spread
 
+### Multi-Component Loss Function
 ```
-preterm-infant-pose-estimation/
-├── configs/              # Configuration files
-├── data/                 # Dataset directory
-├── demo/                 # Demo scripts
-├── models/               # Model implementations
-│   ├── backbone.py
-│   ├── fusion_head.py
-│   └── pose_estimator.py
-├── losses/               # Loss functions
-│   ├── heatmap_loss.py
-│   ├── regression_loss.py
-│   └── morphology_loss.py
-├── utils/                # Utility functions
-├── tools/                # Data preparation tools
-├── train.py              # Training script
-├── evaluate.py           # Evaluation script
-├── requirements.txt
-└── README.md
+L_total = λ₁·L_heatmap + λ₂·L_offset + λ₃·L_peak 
+        + λ₄·L_variance + λ₅·L_overlap + λ₆·L_shape
 ```
 
-## 🔧 Advanced Usage
+| Loss | Description | Default Weight |
+|------|-------------|----------------|
+| L_heatmap | Heatmap MSE loss | 1.0 |
+| L_offset | Offset regression (SmoothL1) | 1.0 |
+| L_peak | Peak localization (L2) | 0.5 |
+| L_variance | Variance alignment | 0.1 |
+| L_overlap | Spatial overlap regularization | 0.05 |
+| L_shape | Distribution shape (entropy) | 0.05 |
 
-### Custom Loss Weights
+### Gaussian Distribution Constraints
+- **Variance Alignment**: σ_pred → σ_gt (target sigma = 2.0)
+- **Spatial Overlap**: Prevents adjacent keypoint ambiguity
+- **Shape Constraint**: Encourages unimodal Gaussian distribution
 
-```python
-loss_config = {
-    'heatmap_weight': 1.0,
-    'regression_weight': 0.5,
-    'morphology_weight': 0.3
-}
-```
+### HRNet Backbone (Optional)
+- Multi-resolution parallel branches
+- High-resolution representations throughout
+- Multi-scale feature fusion
 
-### Multi-GPU Training
+## Evaluation Metrics
 
-```bash
-python -m torch.distributed.launch \
-    --nproc_per_node=4 \
-    train.py --config configs/default.yaml
-```
+Following COCO keypoint evaluation protocol:
+- **AP**: Average Precision at OKS = 0.50:0.05:0.95
+- **AP50**: AP at OKS = 0.50
+- **AP75**: AP at OKS = 0.75
+- **AP_M**: AP for medium objects
+- **AP_L**: AP for large objects
+- **AR**: Average Recall
 
-## 📝 Citation
+## Expected Results
 
-If you find this work useful, please cite:
+| Model | Input Size | AP | AP50 | AP75 |
+|-------|------------|-----|------|------|
+| HRFormer-Base | 256x192 | 75.6 | 90.8 | 82.8 |
+| HRFormer-Base | 384x288 | 77.2 | 91.0 | 83.6 |
+| HRNet-W32 | 256x192 | 74.4 | 90.5 | 81.9 |
+| HRNet-W48 | 384x288 | 76.3 | 90.8 | 82.9 |
+
+## Training Tips
+
+1. **Learning Rate**: Use warmup for first 5 epochs
+2. **Data Augmentation**: Enable random flip, rotation, and half-body
+3. **Batch Size**: Larger batch size improves stability
+4. **Mixed Precision**: Enable FP16 for faster training
+
+## Citation
 
 ```bibtex
-@article{bao2025morphology,
-  title={Morphology-Aware Pose Estimation with Gaussian Bias Mitigation for Robust Preterm Infant Movements Monitoring},
-  author={Bao, Xianfu and Shin, Hyunsoo and Hwang, Hyunho and Huang, Huafei and Lin, Peng and Cao, Jiuwen and Lee, Sungon},
-  journal={Neural Networks},
-  year={2025}
+@inproceedings{yuan2021hrformer,
+  title={HRFormer: High-Resolution Transformer for Dense Prediction},
+  author={Yuan, Yuhui and Fu, Rao and Huang, Lang and Lin, Weihong and Zhang, Chao and Chen, Xilin and Wang, Jingdong},
+  booktitle={NeurIPS},
+  year={2021}
+}
+
+@inproceedings{sun2019deep,
+  title={Deep High-Resolution Representation Learning for Visual Recognition},
+  author={Sun, Ke and Xiao, Bin and Liu, Dong and Wang, Jingdong},
+  booktitle={CVPR},
+  year={2019}
 }
 ```
 
-## 🤝 Contributing
+## License
 
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+This project is released under the Apache 2.0 License.
 
-## 📄 License
+## Acknowledgements
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- Dataset collection: Jiaxing Maternity and Child Health Hospital
-- Funding: Machine Learning and I-health International Cooperation Base of Zhejiang Province
-- Infrastructure support: Hangzhou Dianzi University & Hanyang University
-
-## 📧 Contact
-
-- **Jiuwen Cao** (Corresponding Author): jwcao@hdu.edu.cn
-- **Sungon Lee** (Corresponding Author): sungon@hanyang.ac.kr
-- **Xianfu Bao**: baoxf96@163.com
-
-## 🔗 Links
-
-- [Paper](https://arxiv.org/) (Coming soon)
-- [Project Page](https://yourprojectpage.com)
-- [Demo Video](https://youtu.be/)
-
-## ⚠️ Disclaimer
-
-This tool is intended for research purposes only. Clinical decisions should be made by qualified healthcare professionals. Always consult with medical experts for diagnosis and treatment.
-
----
-
-**Note**: This is an active research project. Updates and improvements are ongoing.
+- [MMPose](https://github.com/open-mmlab/mmpose)
+- [HRNet](https://github.com/HRNet/HRNet-Human-Pose-Estimation)

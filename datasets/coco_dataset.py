@@ -162,10 +162,16 @@ class COCOPoseDataset(Dataset):
         std = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
         img_tensor = (img_tensor - mean) / std
         
+        # Keypoints in input image space (for fusion loss)
+        keypoints_input = torch.from_numpy(data['keypoints']).float()
+        keypoints_visible = torch.from_numpy(data['keypoints_visible']).float()
+        
         return {
             'img': img_tensor,
             'target': torch.from_numpy(target).float(),
             'target_weight': torch.from_numpy(target_weight).float(),
+            'keypoints': keypoints_input,  # (K, 2) in input image space
+            'keypoints_visible': keypoints_visible,  # (K,)
             'meta': {
                 'image_id': data['image_id'],
                 'ann_id': data['ann_id'],

@@ -160,11 +160,22 @@ def train_one_epoch(
         targets = batch['target'].to(device)
         target_weights = batch['target_weight'].to(device)
         
+        # Get keypoints for fusion loss
+        gt_keypoints = batch.get('keypoints')
+        if gt_keypoints is not None:
+            gt_keypoints = gt_keypoints.to(device)
+        
         # Forward pass with mixed precision
         optimizer.zero_grad()
         
         with autocast(enabled=cfg.train.fp16):
-            outputs = model(imgs, targets, target_weights)
+            outputs = model(
+                imgs, 
+                targets, 
+                target_weights,
+                gt_keypoints=gt_keypoints,
+                input_size=cfg.data.input_size,
+            )
             loss = outputs['loss']
         
         # Backward pass
@@ -185,16 +196,34 @@ def train_one_epoch(
             lr = optimizer.param_groups[0]['lr']
             global_step = epoch * num_batches + batch_idx
             
-            logger.info(
+            # Build log message
+            log_msg = (
                 f'Epoch [{epoch}][{batch_idx}/{num_batches}] '
                 f'Loss: {loss_meter.val:.4f} ({loss_meter.avg:.4f}) '
                 f'LR: {lr:.6f} '
                 f'Time: {batch_time.val:.3f}s'
             )
             
+            # Add individual loss components if using fusion loss
+            if 'losses' in outputs:
+                losses = outputs['losses']
+                loss_strs = []
+                for name, val in losses.items():
+                    if name != 'total_loss':
+                        loss_strs.append(f'{name}: {val.item():.4f}')
+                if loss_strs:
+                    log_msg += ' | ' + ', '.join(loss_strs)
+            
+            logger.info(log_msg)
+            
             # TensorBoard logging
             writer.add_scalar('train/loss', loss_meter.val, global_step)
             writer.add_scalar('train/lr', lr, global_step)
+            
+            # Log individual losses
+            if 'losses' in outputs:
+                for name, val in outputs['losses'].items():
+                    writer.add_scalar(f'train/{name}', val.item(), global_step)
     
     return loss_meter.avg
 
@@ -225,15 +254,29 @@ def validate(
             target_weights = batch['target_weight'].to(device)
             metas = batch['meta']
             
+            # Get keypoints for fusion loss
+            gt_keypoints = batch.get('keypoints')
+            if gt_keypoints is not None:
+                gt_keypoints = gt_keypoints.to(device)
+            
             # Forward pass
-            outputs = model(imgs, targets, target_weights)
+            outputs = model(
+                imgs, 
+                targets, 
+                target_weights,
+                gt_keypoints=gt_keypoints,
+                input_size=cfg.data.input_size,
+            )
             loss = outputs['loss']
             heatmaps = outputs['heatmaps']
             
             loss_meter.update(loss.item(), imgs.size(0))
             
             # Decode predictions
-            pred_keypoints, pred_scores = model.decode_heatmaps(heatmaps)
+            if hasattr(model, 'head') and hasattr(model.head, 'decode'):
+                pred_keypoints, pred_scores = model.head.decode(outputs, apply_offset=True)
+            else:
+                pred_keypoints, pred_scores = model.decode_heatmaps(heatmaps)
             
             # Transform to original image coordinates
             pred_keypoints = pred_keypoints.cpu().numpy()

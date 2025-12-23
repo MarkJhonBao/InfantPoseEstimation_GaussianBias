@@ -54,11 +54,25 @@ class ModelConfig:
     base_channels: int = 78  # HRFormer-Base
     
     # Head settings
+    head_type: str = 'fusion'  # 'heatmap' or 'fusion'
     head_in_channels: int = 78  # HRFormer-Base output channels
     num_keypoints: int = 17
+    hidden_dim: int = 256
     
     # Loss settings
     use_target_weight: bool = True
+    use_fusion_loss: bool = True
+    
+    # Fusion loss weights
+    heatmap_loss_weight: float = 1.0
+    offset_loss_weight: float = 1.0
+    peak_loss_weight: float = 0.5
+    variance_loss_weight: float = 0.1
+    overlap_loss_weight: float = 0.05
+    shape_loss_weight: float = 0.05
+    
+    # Gaussian heatmap settings
+    target_sigma: float = 2.0
 
 
 @dataclass

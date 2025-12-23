@@ -1,5 +1,6 @@
 """
 Pose Estimation Head and Complete Model
+Supports both standard heatmap head and fusion (heatmap + regression) head
 """
 
 import torch
@@ -9,6 +10,13 @@ from typing import Dict, Tuple, Optional
 
 from .hrnet import hrnet_w32, hrnet_w48
 from .hrformer import hrformer_base, hrformer_small
+from .fusion_head import (
+    HeatmapRegressionHead,
+    FusionPoseLoss,
+    SoftArgmax2D,
+    build_fusion_head,
+    build_fusion_loss,
+)
 
 
 class HeatmapHead(nn.Module):
@@ -138,10 +146,16 @@ class KeypointMSELoss(nn.Module):
 class PoseEstimator(nn.Module):
     """Top-down Pose Estimator.
     
+    Supports two head types:
+    1. 'heatmap': Standard heatmap-only head
+    2. 'fusion': Heatmap + Regression fusion head with Gaussian constraints
+    
     Args:
         backbone: Backbone network name.
         num_keypoints: Number of keypoints.
         pretrained: Whether to use pretrained backbone.
+        head_type: 'heatmap' or 'fusion'.
+        use_fusion_loss: Whether to use multi-component fusion loss.
     """
     
     def __init__(
@@ -149,8 +163,13 @@ class PoseEstimator(nn.Module):
         backbone: str = 'hrformer_base',
         num_keypoints: int = 17,
         pretrained: bool = True,
+        head_type: str = 'fusion',
+        use_fusion_loss: bool = True,
     ):
         super().__init__()
+        
+        self.head_type = head_type
+        self.use_fusion_loss = use_fusion_loss and (head_type == 'fusion')
         
         # Build backbone
         if backbone == 'hrnet_w32':
@@ -169,46 +188,87 @@ class PoseEstimator(nn.Module):
             raise ValueError(f"Unknown backbone: {backbone}")
         
         # Build head
-        self.head = HeatmapHead(
-            in_channels=in_channels,
-            out_channels=num_keypoints,
-            num_deconv_layers=0,  # HRNet/HRFormer doesn't need deconv
-        )
-        
-        # Loss
-        self.loss_fn = KeypointMSELoss(use_target_weight=True)
+        if head_type == 'fusion':
+            self.head = HeatmapRegressionHead(
+                in_channels=in_channels,
+                num_keypoints=num_keypoints,
+                hidden_dim=256,
+                use_subpixel_refinement=True,
+            )
+            # Fusion loss with multiple components
+            self.loss_fn = FusionPoseLoss(
+                heatmap_weight=1.0,
+                offset_weight=1.0,
+                peak_weight=0.5,
+                variance_weight=0.1,
+                overlap_weight=0.05,
+                shape_weight=0.05,
+                target_sigma=2.0,
+                use_target_weight=True,
+            )
+        else:
+            self.head = HeatmapHead(
+                in_channels=in_channels,
+                out_channels=num_keypoints,
+                num_deconv_layers=0,
+            )
+            self.loss_fn = KeypointMSELoss(use_target_weight=True)
         
         self.num_keypoints = num_keypoints
+        self.soft_argmax = SoftArgmax2D()
     
     def forward(
         self,
         x: torch.Tensor,
         target: Optional[torch.Tensor] = None,
         target_weight: Optional[torch.Tensor] = None,
+        gt_keypoints: Optional[torch.Tensor] = None,
+        input_size: Tuple[int, int] = (192, 256),
     ) -> Dict[str, torch.Tensor]:
         """
         Args:
             x: Input images (B, 3, H, W).
             target: Target heatmaps (B, K, H', W') for training.
             target_weight: Target weights (B, K, 1) for training.
+            gt_keypoints: Ground truth keypoint coordinates (B, K, 2) for fusion loss.
+            input_size: Input image size (W, H).
             
         Returns:
-            Dictionary containing:
-                - heatmaps: Predicted heatmaps.
-                - loss: Loss value (only in training mode).
+            Dictionary containing outputs and optionally losses.
         """
         # Feature extraction
         features = self.backbone(x)
         
-        # Heatmap prediction
-        heatmaps = self.head(features)
-        
-        output = {'heatmaps': heatmaps}
+        # Head forward
+        if self.head_type == 'fusion':
+            outputs = self.head(features)
+            output = {
+                'heatmaps': outputs['heatmaps'],
+                'offsets': outputs['offsets'],
+                'variances': outputs['variances'],
+                'fusion_weight': outputs['fusion_weight'],
+            }
+        else:
+            heatmaps = self.head(features)
+            output = {'heatmaps': heatmaps}
         
         # Compute loss if targets provided
         if target is not None:
-            loss = self.loss_fn(heatmaps, target, target_weight)
-            output['loss'] = loss
+            if self.head_type == 'fusion' and self.use_fusion_loss and gt_keypoints is not None:
+                H, W = output['heatmaps'].shape[2:]
+                losses = self.loss_fn(
+                    outputs=output,
+                    target_heatmaps=target,
+                    target_weight=target_weight,
+                    gt_keypoints=gt_keypoints,
+                    input_size=input_size,
+                    heatmap_size=(H, W),
+                )
+                output['loss'] = losses['total_loss']
+                output['losses'] = losses
+            else:
+                loss = self.loss_fn(output['heatmaps'], target, target_weight)
+                output['loss'] = loss
         
         return output
     
@@ -226,12 +286,19 @@ class PoseEstimator(nn.Module):
             flip_pairs: Flip pairs for keypoints.
             
         Returns:
-            keypoints: Predicted keypoints (B, K, 2).
+            keypoints: Predicted keypoints (B, K, 2) in heatmap space.
             scores: Keypoint scores (B, K).
         """
         # Forward pass
         output = self.forward(x)
-        heatmaps = output['heatmaps']
+        
+        if self.head_type == 'fusion':
+            # Use fusion head's decode method
+            keypoints, scores = self.head.decode(output, apply_offset=True)
+            heatmaps = output['heatmaps']
+        else:
+            heatmaps = output['heatmaps']
+            keypoints, scores = self.decode_heatmaps(heatmaps)
         
         if flip and flip_pairs is not None:
             # Flip input and forward
@@ -248,11 +315,16 @@ class PoseEstimator(nn.Module):
                 heatmaps_flipped_new[:, pair[0]] = heatmaps_flipped[:, pair[1]]
                 heatmaps_flipped_new[:, pair[1]] = heatmaps_flipped[:, pair[0]]
             
-            # Average
-            heatmaps = (heatmaps + heatmaps_flipped_new) / 2
-        
-        # Decode heatmaps to keypoints
-        keypoints, scores = self.decode_heatmaps(heatmaps)
+            # Average heatmaps
+            heatmaps_avg = (heatmaps + heatmaps_flipped_new) / 2
+            
+            # Decode averaged heatmaps
+            if self.head_type == 'fusion':
+                output_avg = output.copy()
+                output_avg['heatmaps'] = heatmaps_avg
+                keypoints, scores = self.head.decode(output_avg, apply_offset=True)
+            else:
+                keypoints, scores = self.decode_heatmaps(heatmaps_avg)
         
         return keypoints, scores
     
@@ -261,7 +333,7 @@ class PoseEstimator(nn.Module):
         heatmaps: torch.Tensor,
         shift: bool = True,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Decode heatmaps to keypoint coordinates.
+        """Decode heatmaps to keypoint coordinates (standard method).
         
         Args:
             heatmaps: Predicted heatmaps (B, K, H, W).
@@ -314,5 +386,7 @@ def build_model(cfg) -> PoseEstimator:
         backbone=cfg.model.backbone,
         num_keypoints=cfg.model.num_keypoints,
         pretrained=cfg.model.pretrained,
+        head_type=getattr(cfg.model, 'head_type', 'fusion'),
+        use_fusion_loss=getattr(cfg.model, 'use_fusion_loss', True),
     )
     return model

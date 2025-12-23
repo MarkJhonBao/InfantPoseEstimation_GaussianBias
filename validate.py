@@ -67,6 +67,11 @@ def validate(
             target_weights = batch['target_weight'].to(device)
             metas = batch['meta']
             
+            # Get keypoints for fusion loss
+            gt_keypoints = batch.get('keypoints')
+            if gt_keypoints is not None:
+                gt_keypoints = gt_keypoints.to(device)
+            
             # Forward pass with optional flip test
             if flip_test:
                 pred_keypoints, pred_scores = model.inference(
@@ -74,11 +79,19 @@ def validate(
                 )
             else:
                 outputs = model(imgs)
-                heatmaps = outputs['heatmaps']
-                pred_keypoints, pred_scores = model.decode_heatmaps(heatmaps)
+                # Check if model has fusion head
+                if hasattr(model, 'head') and hasattr(model.head, 'decode'):
+                    pred_keypoints, pred_scores = model.head.decode(outputs, apply_offset=True)
+                else:
+                    heatmaps = outputs['heatmaps']
+                    pred_keypoints, pred_scores = model.decode_heatmaps(heatmaps)
             
             # Compute loss (for logging)
-            outputs = model(imgs, targets, target_weights)
+            outputs = model(
+                imgs, targets, target_weights,
+                gt_keypoints=gt_keypoints,
+                input_size=cfg.data.input_size,
+            )
             loss = outputs['loss']
             loss_meter.update(loss.item(), imgs.size(0))
             

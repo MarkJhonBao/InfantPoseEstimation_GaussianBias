@@ -1,42 +1,27 @@
-# Core dependencies
-torch>=1.9.0
-torchvision>=0.10.0
-numpy>=1.19.0
+# PyTorch and related
+torch>=1.10.0
+torchvision>=0.11.0
+
+# Data processing
+numpy>=1.21.0
 opencv-python>=4.5.0
 Pillow>=8.0.0
 
-# Data handling
-pycocotools>=2.0.2
-scipy>=1.5.0
-scikit-image>=0.17.0
+# COCO tools
+pycocotools>=2.0.0
 
-# Configuration
-PyYAML>=5.4.0
-easydict>=1.9
-
-# Training utilities
-tqdm>=4.60.0
-tensorboard>=2.5.0
-
-# Visualization
-matplotlib>=3.3.0
-seaborn>=0.11.0
+# Logging and monitoring
+tensorboard>=2.8.0
+tqdm>=4.62.0
 
 # Utilities
-pandas>=1.1.0
-json5>=0.9.5
+pyyaml>=6.0
+scipy>=1.7.0
+matplotlib>=3.5.0
 
-# Optional: For faster data loading
-albumentations>=1.0.0
+# Optional: for distributed training
+# torch-distributed
 
-# Optional: For model optimization
-onnx>=1.9.0
-onnxruntime>=1.8.0
-
-# Optional: For distributed training
-apex  # Nvidia Apex for mixed precision training (install separately)
-
-# Development
-pytest>=6.2.0
-black>=21.5b0
-flake8>=3.9.0
+# Optional: for onnx export
+# onnx>=1.10.0
+# onnxruntime>=1.10.0

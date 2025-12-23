@@ -1,340 +1,329 @@
 """
-Evaluation metrics for preterm infant pose estimation
-Includes AP (Average Precision) and PCK (Percentage of Correct Keypoints)
+Evaluation Metrics for Pose Estimation
+Including OKS-based AP computation
 """
+
 import numpy as np
+from typing import Dict, List, Tuple, Optional, Any
 from collections import defaultdict
-from pycocotools.cocoeval import COCOeval
-import json
 
 
-def calculate_pck(predictions, bboxes, image_ids, dataset, threshold=0.2):
-    """
-    Calculate PCK (Percentage of Correct Keypoints)
-    
-    A keypoint is considered correct if the distance between predicted and
-    ground truth is within threshold * bbox_diagonal
+class COCOEvaluator:
+    """COCO-style pose estimation evaluator.
     
     Args:
-        predictions: list of (N, K, 2) predicted coordinates
-        bboxes: list of (N, 4) bounding boxes [x, y, w, h]
-        image_ids: list of image IDs
-        dataset: dataset object with ground truth
-        threshold: PCK threshold (default 0.2)
-    
-    Returns:
-        pck: PCK score
+        ann_file: Path to COCO annotation file.
+        oks_sigmas: OKS sigma values for each keypoint.
     """
-    all_preds = np.concatenate(predictions, axis=0)
-    all_boxes = np.concatenate(bboxes, axis=0)
-    all_ids = np.concatenate(image_ids, axis=0)
     
-    num_samples = len(all_preds)
-    num_joints = all_preds.shape[1]
+    # Default COCO OKS sigmas
+    DEFAULT_OKS_SIGMAS = np.array([
+        0.026,  # nose
+        0.025,  # left_eye
+        0.025,  # right_eye
+        0.035,  # left_ear
+        0.035,  # right_ear
+        0.079,  # left_shoulder
+        0.079,  # right_shoulder
+        0.072,  # left_elbow
+        0.072,  # right_elbow
+        0.062,  # left_wrist
+        0.062,  # right_wrist
+        0.107,  # left_hip
+        0.107,  # right_hip
+        0.087,  # left_knee
+        0.087,  # right_knee
+        0.089,  # left_ankle
+        0.089,  # right_ankle
+    ])
     
-    correct = np.zeros((num_samples, num_joints))
-    total = np.zeros((num_samples, num_joints))
-    
-    for i in range(num_samples):
-        img_id = all_ids[i]
+    def __init__(
+        self,
+        ann_file: Optional[str] = None,
+        oks_sigmas: Optional[np.ndarray] = None,
+        num_keypoints: int = 17,
+    ):
+        self.ann_file = ann_file
+        self.oks_sigmas = oks_sigmas if oks_sigmas is not None else self.DEFAULT_OKS_SIGMAS
+        self.num_keypoints = num_keypoints
         
-        # Get ground truth
-        ann_ids = dataset.coco.getAnnIds(imgIds=int(img_id))
-        if len(ann_ids) == 0:
-            continue
+        # OKS thresholds for AP computation
+        self.oks_thresholds = np.linspace(0.5, 0.95, 10)
         
-        ann = dataset.coco.loadAnns(ann_ids)[0]
-        gt_keypoints = np.array(ann['keypoints']).reshape(-1, 3)
-        gt_joints = gt_keypoints[:, :2]
-        gt_vis = gt_keypoints[:, 2]
+        # Storage for predictions and ground truths
+        self.predictions = []
+        self.reset()
+    
+    def reset(self):
+        """Reset evaluator state."""
+        self.predictions = []
+    
+    def update(
+        self,
+        pred_keypoints: np.ndarray,
+        pred_scores: np.ndarray,
+        image_ids: List[int],
+        ann_ids: List[int],
+        centers: np.ndarray,
+        scales: np.ndarray,
+        areas: np.ndarray,
+        bboxes: np.ndarray,
+    ):
+        """Update with batch predictions.
         
-        # Calculate bbox diagonal
-        bbox = all_boxes[i]
-        bbox_diag = np.sqrt(bbox[2]**2 + bbox[3]**2)
-        threshold_dist = threshold * bbox_diag
+        Args:
+            pred_keypoints: Predicted keypoints (B, K, 2) in original image space.
+            pred_scores: Keypoint scores (B, K).
+            image_ids: Image IDs.
+            ann_ids: Annotation IDs.
+            centers: Bbox centers (B, 2).
+            scales: Bbox scales (B, 2).
+            areas: Bbox areas (B,).
+            bboxes: Bounding boxes (B, 4).
+        """
+        batch_size = pred_keypoints.shape[0]
         
-        # Calculate distances
-        for j in range(num_joints):
-            if gt_vis[j] > 0:  # Only evaluate visible joints
-                total[i, j] = 1
-                
-                pred_joint = all_preds[i, j]
-                gt_joint = gt_joints[j]
-                
-                distance = np.linalg.norm(pred_joint - gt_joint)
-                
-                if distance <= threshold_dist:
-                    correct[i, j] = 1
-    
-    # Calculate PCK per joint
-    pck_per_joint = correct.sum(axis=0) / (total.sum(axis=0) + 1e-8)
-    
-    # Overall PCK
-    pck = correct.sum() / (total.sum() + 1e-8)
-    
-    return pck, pck_per_joint
-
-
-def calculate_ap(predictions, bboxes, image_ids, dataset, oks_threshold=0.5):
-    """
-    Calculate AP (Average Precision) using OKS (Object Keypoint Similarity)
-    
-    Args:
-        predictions: list of (N, K, 2) predicted coordinates
-        bboxes: list of (N, 4) bounding boxes
-        image_ids: list of image IDs
-        dataset: dataset object with COCO API
-        oks_threshold: OKS threshold for positive detection
-    
-    Returns:
-        ap: Average Precision
-    """
-    # Convert predictions to COCO format
-    coco_results = []
-    
-    all_preds = np.concatenate(predictions, axis=0)
-    all_boxes = np.concatenate(bboxes, axis=0)
-    all_ids = np.concatenate(image_ids, axis=0)
-    
-    for i in range(len(all_preds)):
-        img_id = int(all_ids[i])
-        bbox = all_boxes[i].tolist()
-        keypoints = all_preds[i].flatten().tolist()
-        
-        # Add visibility flags (all visible for now)
-        keypoints_with_vis = []
-        for j in range(0, len(keypoints), 2):
-            keypoints_with_vis.extend([keypoints[j], keypoints[j+1], 2])
-        
-        result = {
-            'image_id': img_id,
-            'category_id': 1,
-            'keypoints': keypoints_with_vis,
-            'score': 1.0  # Confidence score
-        }
-        coco_results.append(result)
-    
-    if len(coco_results) == 0:
-        return 0.0
-    
-    # Use COCOeval to calculate AP
-    coco_dt = dataset.coco.loadRes(coco_results)
-    coco_eval = COCOeval(dataset.coco, coco_dt, 'keypoints')
-    coco_eval.params.imgIds = list(set(all_ids.tolist()))
-    coco_eval.evaluate()
-    coco_eval.accumulate()
-    coco_eval.summarize()
-    
-    # AP is the first metric
-    ap = coco_eval.stats[0]
-    
-    return ap
-
-
-def calculate_oks(pred_keypoints, gt_keypoints, bbox, sigmas=None):
-    """
-    Calculate OKS (Object Keypoint Similarity) for a single sample
-    
-    OKS = Σ exp(-d²/(2s²k²)) δ(v>0) / Σ δ(v>0)
-    
-    Where:
-    - d: distance between predicted and ground truth keypoint
-    - s: scale = sqrt(bbox_area)
-    - k: per-keypoint constant (default from COCO)
-    - v: visibility flag
-    
-    Args:
-        pred_keypoints: (K, 2) predicted keypoints
-        gt_keypoints: (K, 3) ground truth keypoints [x, y, v]
-        bbox: (4,) bounding box [x, y, w, h]
-        sigmas: (K,) per-keypoint sigmas
-    """
-    num_joints = len(pred_keypoints)
-    
-    if sigmas is None:
-        # Default COCO sigmas (adjust for preterm infants if needed)
-        sigmas = np.array([
-            0.026, 0.025, 0.025,  # nose, eyes
-            0.035, 0.035,          # ears
-            0.079, 0.079,          # shoulders
-            0.072, 0.072,          # elbows
-            0.062, 0.062,          # wrists
-            0.107, 0.107           # hips
-        ])
-    
-    # Calculate scale from bbox
-    bbox_area = bbox[2] * bbox[3]
-    scale = np.sqrt(bbox_area)
-    
-    # Calculate distances
-    gt_coords = gt_keypoints[:, :2]
-    gt_vis = gt_keypoints[:, 2]
-    
-    distances = np.linalg.norm(pred_keypoints - gt_coords, axis=1)
-    
-    # Calculate OKS
-    oks_per_joint = np.exp(-distances**2 / (2 * scale**2 * sigmas**2))
-    oks_per_joint = oks_per_joint * (gt_vis > 0)
-    
-    oks = oks_per_joint.sum() / ((gt_vis > 0).sum() + 1e-8)
-    
-    return oks
-
-
-def calculate_per_joint_accuracy(predictions, bboxes, image_ids, dataset):
-    """
-    Calculate accuracy for each individual joint
-    
-    Returns:
-        accuracy_dict: dictionary mapping joint names to accuracies
-    """
-    # Get joint names from dataset
-    if hasattr(dataset, 'joint_names'):
-        joint_names = dataset.joint_names
-    else:
-        joint_names = [
-            'nose', 'left_eye', 'right_eye',
-            'left_ear', 'right_ear',
-            'left_shoulder', 'right_shoulder',
-            'left_elbow', 'right_elbow',
-            'left_wrist', 'right_wrist',
-            'left_hip', 'right_hip'
-        ]
-    
-    pck, pck_per_joint = calculate_pck(predictions, bboxes, image_ids, dataset)
-    
-    accuracy_dict = {}
-    for i, name in enumerate(joint_names):
-        accuracy_dict[name] = pck_per_joint[i]
-    
-    return accuracy_dict
-
-
-def calculate_temporal_consistency(predictions_sequence):
-    """
-    Calculate temporal consistency for video sequences
-    Measures smoothness of trajectories
-    
-    Args:
-        predictions_sequence: (T, K, 2) sequence of predictions over time
-    
-    Returns:
-        consistency_score: lower is better (0 = perfectly smooth)
-    """
-    if len(predictions_sequence) < 2:
-        return 0.0
-    
-    # Calculate frame-to-frame velocity
-    velocities = np.diff(predictions_sequence, axis=0)
-    
-    # Calculate acceleration (change in velocity)
-    accelerations = np.diff(velocities, axis=0)
-    
-    # Consistency score = average magnitude of acceleration
-    consistency_score = np.mean(np.linalg.norm(accelerations, axis=2))
-    
-    return consistency_score
-
-
-def calculate_movement_amplitude(predictions_sequence):
-    """
-    Calculate movement amplitude for each joint
-    Useful for assessing motor activity levels
-    """
-    if len(predictions_sequence) < 2:
-        return np.zeros(predictions_sequence.shape[1])
-    
-    # Calculate range of motion for each joint
-    min_pos = predictions_sequence.min(axis=0)
-    max_pos = predictions_sequence.max(axis=0)
-    
-    amplitude = np.linalg.norm(max_pos - min_pos, axis=1)
-    
-    return amplitude
-
-
-def evaluate_model(model, dataloader, device, dataset):
-    """
-    Complete evaluation pipeline
-    
-    Returns:
-        metrics: dictionary with all evaluation metrics
-    """
-    model.eval()
-    
-    all_preds = []
-    all_boxes = []
-    all_ids = []
-    
-    import torch
-    from utils.postprocess import fused_decode
-    
-    with torch.no_grad():
-        for batch in dataloader:
-            images = batch['image'].to(device)
+        for i in range(batch_size):
+            # Format keypoints with visibility
+            kpts = np.zeros((self.num_keypoints, 3))
+            kpts[:, :2] = pred_keypoints[i]
+            kpts[:, 2] = pred_scores[i]
             
-            # Forward pass
-            outputs = model(images)
+            # Overall score (mean of valid keypoints)
+            valid_mask = pred_scores[i] > 0
+            if valid_mask.sum() > 0:
+                score = pred_scores[i][valid_mask].mean()
+            else:
+                score = 0.0
             
-            # Decode predictions
-            preds, maxvals = fused_decode(
-                outputs['heatmaps'],
-                outputs.get('coords', None),
-                batch['center'],
-                batch['scale']
-            )
+            self.predictions.append({
+                'image_id': int(image_ids[i]),
+                'ann_id': int(ann_ids[i]),
+                'keypoints': kpts.flatten().tolist(),
+                'score': float(score),
+                'area': float(areas[i]),
+                'bbox': bboxes[i].tolist(),
+            })
+    
+    def compute_oks(
+        self,
+        pred_kpts: np.ndarray,
+        gt_kpts: np.ndarray,
+        gt_vis: np.ndarray,
+        area: float,
+    ) -> float:
+        """Compute Object Keypoint Similarity.
+        
+        Args:
+            pred_kpts: Predicted keypoints (K, 2).
+            gt_kpts: Ground truth keypoints (K, 2).
+            gt_vis: Ground truth visibility (K,).
+            area: Object area.
             
-            all_preds.append(preds.cpu().numpy())
-            all_boxes.append(batch['bbox'].cpu().numpy())
-            all_ids.append(batch['image_id'].cpu().numpy())
+        Returns:
+            OKS value.
+        """
+        # Compute distances
+        dx = pred_kpts[:, 0] - gt_kpts[:, 0]
+        dy = pred_kpts[:, 1] - gt_kpts[:, 1]
+        d = dx ** 2 + dy ** 2
+        
+        # Normalize by area and sigma
+        s = area
+        k = self.oks_sigmas
+        e = d / (2 * s * (k ** 2) + np.spacing(1))
+        
+        # Compute OKS
+        valid = gt_vis > 0
+        if valid.sum() == 0:
+            return 0.0
+        
+        oks = np.sum(np.exp(-e[valid])) / valid.sum()
+        
+        return oks
     
-    # Calculate metrics
-    ap = calculate_ap(all_preds, all_boxes, all_ids, dataset)
-    pck, pck_per_joint = calculate_pck(all_preds, all_boxes, all_ids, dataset)
-    per_joint_acc = calculate_per_joint_accuracy(all_preds, all_boxes, all_ids, dataset)
-    
-    metrics = {
-        'AP': ap,
-        'PCK@0.2': pck,
-        'per_joint_PCK': pck_per_joint,
-        'per_joint_accuracy': per_joint_acc
-    }
-    
-    return metrics
-
-
-def print_metrics(metrics):
-    """Pretty print evaluation metrics"""
-    print("\n" + "="*80)
-    print("EVALUATION METRICS")
-    print("="*80)
-    
-    print(f"AP (Average Precision): {metrics['AP']:.4f}")
-    print(f"PCK@0.2: {metrics['PCK@0.2']:.4f}")
-    
-    if 'per_joint_accuracy' in metrics:
-        print("\nPer-Joint Accuracy:")
-        print("-"*80)
-        for joint_name, accuracy in metrics['per_joint_accuracy'].items():
-            print(f"  {joint_name:20s}: {accuracy:.4f}")
-    
-    print("="*80 + "\n")
-
-
-def save_metrics(metrics, output_path):
-    """Save metrics to JSON file"""
-    # Convert numpy arrays to lists for JSON serialization
-    metrics_json = {}
-    for key, value in metrics.items():
-        if isinstance(value, np.ndarray):
-            metrics_json[key] = value.tolist()
-        elif isinstance(value, dict):
-            metrics_json[key] = {k: float(v) if isinstance(v, np.ndarray) else v 
-                                for k, v in value.items()}
+    def evaluate(self, gt_annotations: Optional[List[Dict]] = None) -> Dict[str, float]:
+        """Evaluate predictions.
+        
+        Args:
+            gt_annotations: Ground truth annotations (if not using ann_file).
+            
+        Returns:
+            Dictionary of metrics.
+        """
+        if len(self.predictions) == 0:
+            return {'AP': 0.0, 'AP50': 0.0, 'AP75': 0.0}
+        
+        # Load ground truth from COCO if ann_file provided
+        if self.ann_file is not None:
+            from pycocotools.coco import COCO
+            from pycocotools.cocoeval import COCOeval
+            import json
+            import tempfile
+            import os
+            
+            # Save predictions to temp file
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+                json.dump(self.predictions, f)
+                pred_file = f.name
+            
+            try:
+                # Load COCO ground truth
+                coco_gt = COCO(self.ann_file)
+                
+                # Load predictions
+                coco_dt = coco_gt.loadRes(pred_file)
+                
+                # Run evaluation
+                coco_eval = COCOeval(coco_gt, coco_dt, 'keypoints')
+                coco_eval.evaluate()
+                coco_eval.accumulate()
+                coco_eval.summarize()
+                
+                # Extract metrics
+                metrics = {
+                    'AP': coco_eval.stats[0],
+                    'AP50': coco_eval.stats[1],
+                    'AP75': coco_eval.stats[2],
+                    'AP_M': coco_eval.stats[3],
+                    'AP_L': coco_eval.stats[4],
+                    'AR': coco_eval.stats[5],
+                    'AR50': coco_eval.stats[6],
+                    'AR75': coco_eval.stats[7],
+                    'AR_M': coco_eval.stats[8],
+                    'AR_L': coco_eval.stats[9],
+                }
+            finally:
+                os.unlink(pred_file)
+            
+            return metrics
+        
+        # Manual evaluation if gt_annotations provided
+        elif gt_annotations is not None:
+            return self._manual_evaluate(gt_annotations)
+        
         else:
-            metrics_json[key] = float(value) if isinstance(value, (np.floating, np.integer)) else value
+            raise ValueError("Either ann_file or gt_annotations must be provided")
     
-    with open(output_path, 'w') as f:
-        json.dump(metrics_json, f, indent=4)
+    def _manual_evaluate(self, gt_annotations: List[Dict]) -> Dict[str, float]:
+        """Manual OKS-based AP computation."""
+        # Group predictions and GT by image
+        pred_by_img = defaultdict(list)
+        gt_by_img = defaultdict(list)
+        
+        for pred in self.predictions:
+            pred_by_img[pred['image_id']].append(pred)
+        
+        for gt in gt_annotations:
+            gt_by_img[gt['image_id']].append(gt)
+        
+        # Compute OKS for each threshold
+        aps = []
+        for thresh in self.oks_thresholds:
+            tp = 0
+            fp = 0
+            fn = 0
+            
+            for img_id in gt_by_img:
+                preds = pred_by_img[img_id]
+                gts = gt_by_img[img_id]
+                
+                # Sort predictions by score
+                preds = sorted(preds, key=lambda x: x['score'], reverse=True)
+                
+                matched = set()
+                for pred in preds:
+                    pred_kpts = np.array(pred['keypoints']).reshape(-1, 3)
+                    best_oks = 0
+                    best_gt_idx = -1
+                    
+                    for gt_idx, gt in enumerate(gts):
+                        if gt_idx in matched:
+                            continue
+                        
+                        gt_kpts = np.array(gt['keypoints']).reshape(-1, 3)
+                        oks = self.compute_oks(
+                            pred_kpts[:, :2],
+                            gt_kpts[:, :2],
+                            gt_kpts[:, 2],
+                            gt['area']
+                        )
+                        
+                        if oks > best_oks:
+                            best_oks = oks
+                            best_gt_idx = gt_idx
+                    
+                    if best_oks >= thresh and best_gt_idx >= 0:
+                        tp += 1
+                        matched.add(best_gt_idx)
+                    else:
+                        fp += 1
+                
+                fn += len(gts) - len(matched)
+            
+            # Compute precision at this threshold
+            precision = tp / (tp + fp + 1e-10)
+            aps.append(precision)
+        
+        return {
+            'AP': np.mean(aps),
+            'AP50': aps[0] if len(aps) > 0 else 0.0,
+            'AP75': aps[5] if len(aps) > 5 else 0.0,
+        }
+
+
+class AverageMeter:
+    """Computes and stores the average and current value."""
     
-    print(f"Metrics saved to {output_path}")
+    def __init__(self, name: str = '', fmt: str = ':f'):
+        self.name = name
+        self.fmt = fmt
+        self.reset()
+    
+    def reset(self):
+        self.val = 0
+        self.avg = 0
+        self.sum = 0
+        self.count = 0
+    
+    def update(self, val: float, n: int = 1):
+        self.val = val
+        self.sum += val * n
+        self.count += n
+        self.avg = self.sum / self.count
+    
+    def __str__(self):
+        fmtstr = '{name} {val' + self.fmt + '} ({avg' + self.fmt + '})'
+        return fmtstr.format(**self.__dict__)
+
+
+class MetricLogger:
+    """Logger for multiple metrics."""
+    
+    def __init__(self, delimiter: str = '  '):
+        self.meters = defaultdict(AverageMeter)
+        self.delimiter = delimiter
+    
+    def update(self, **kwargs):
+        for k, v in kwargs.items():
+            if isinstance(v, torch.Tensor):
+                v = v.item()
+            self.meters[k].update(v)
+    
+    def __getattr__(self, attr):
+        if attr in self.meters:
+            return self.meters[attr]
+        return super().__getattr__(attr)
+    
+    def __str__(self):
+        entries = []
+        for name, meter in self.meters.items():
+            entries.append(f"{name}: {meter.avg:.4f}")
+        return self.delimiter.join(entries)
+    
+    def summary(self) -> Dict[str, float]:
+        return {name: meter.avg for name, meter in self.meters.items()}
+
+
+# Import torch here to avoid circular import
+import torch

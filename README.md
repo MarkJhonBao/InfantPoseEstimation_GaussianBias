@@ -1,6 +1,4 @@
-# Human Pose Estimation
 
-A PyTorch implementation of top-down human pose estimation based on HRFormer (High-Resolution Transformer) architecture.
 
 ## Project Structure
 

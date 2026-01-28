@@ -160,23 +160,7 @@ cfg.train.lr = 5e-4
 | `offset_loss_weight` | 1.0 | Weight for offset regression loss |
 | `variance_loss_weight` | 0.1 | Weight for variance alignment loss |
 
-## Model Architecture
 
-### HRFormer Backbone (Default)
-- High-Resolution Transformer architecture
-- Window-based Multi-head Self-Attention (W-MSA)
-- Relative Position Encoding (RPE)
-- Multi-resolution parallel branches with feature fusion
-- Drop Path regularization
-
-### Fusion Head (Heatmap + Regression)
-The fusion head combines heatmap prediction with coordinate regression for improved accuracy:
-
-```
-Shared Features
-     ├── Heatmap Branch → K heatmaps
-     ├── Offset Branch → K×2 offset maps (for quantization error correction)
-     └── Variance Branch → K variance maps (for Gaussian distribution constraint)
 ```
 
 **Key Features:**

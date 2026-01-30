@@ -1,3 +1,155 @@
+# Robust Pose Estimation for Preterm Infant Limb Movement Recognition
+
+[![Paper](https://img.shields.io/badge/Paper-Neural_Networks-blue)](https://doi.org/xxx)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/Python-3.8+-yellow.svg)](https://www.python.org/)
+[![PyTorch](https://img.shields.io/badge/PyTorch-1.10+-red.svg)](https://pytorch.org/)
+
+Official implementation of **"Robust Pose Estimation via Regression Correction and Gaussian Alignment for Preterm Infant Limb Movement Recognition"** (Neural Networks 2026).
+
+<p align="center">
+  <img src="assets/framework.png" width="90%">
+</p>
+
+## 📋 Abstract
+
+Preterm infant pose estimation in neonatal intensive care units (NICUs) is critical for early screening of neurodevelopmental disorders. This work proposes a dual-branch framework that fuses heatmap and regression representations under morphology-aware constraints. Our method addresses three key challenges: **single-frame-dependent keypoint drift**, **discretization-induced localization errors**, and **weak robustness to subtle limb dynamics**.
+
+Our PI-LMR algorithm achieves an accuracy of **93.8%** on the Infant-Skeleton-V2 dataset, outperforming state-of-the-art methods by **2.8%**.
+
+## ✨ Highlights
+
+- 🎯 **Regression-Assisted Fusion Head**: Integrates Gaussian heatmaps with continuous coordinate regression to mitigate quantization errors
+- 🔧 **VAMC Mechanism**: Variance Alignment and Morphological Constraints for enhanced structural consistency
+- 📐 **Shape Constraint Loss (SCL)**: Achieves sub-pixel precision through soft-argmax combined with local Gaussian refinement
+- 🏥 **Clinical Application**: Enables early screening for postural abnormalities in NICU environments
+
+## 🏗️ Architecture
+
+<p align="center">
+  <img src="assets/architecture.png" width="85%">
+</p>
+
+The model consists of three main stages:
+1. **Backbone Architecture**: Multi-scale feature extraction with reverted residual blocks
+2. **Dual-Head Module**: Parallel Gaussian heatmap and coordinate regression branches
+3. **Post-processing Stage**: Morphological constraint optimization for robust localization
+
+
+## 📊 Dataset
+
+### Infant-Skeleton-V2
+
+Our dataset was collected at **Jiaxing Maternity and Child Health Care Hospital** in collaboration with clinical experts.
+
+| Split | Samples | Description |
+|-------|---------|-------------|
+| Train | - | Training set with augmentation |
+| Val | - | Validation set |
+| Test | - | Test set for final evaluation |
+
+### Data Preparation
+
+```bash
+# Download the dataset (contact authors for access)
+# Organize the data as follows:
+data/
+├── infant_skeleton_v2/
+│   ├── images/
+│   │   ├── train/
+│   │   ├── val/
+│   │   └── test/
+│   ├── annotations/
+│   │   ├── train.json
+│   │   ├── val.json
+│   │   └── test.json
+│   └── README.md
+```
+
+### Keypoint Definition
+
+The model predicts **K** anatomical keypoints on the infant body, including:
+- Head landmarks
+- Upper limb joints (shoulder, elbow, wrist)
+- Lower limb joints (hip, knee, ankle)
+- Torso landmarks
+
+## 🚀 Usage
+
+### Training
+
+```bash
+# Single GPU training
+python tools/train.py --config configs/infant_skeleton_v2.yaml
+
+# Multi-GPU training
+python -m torch.distributed.launch --nproc_per_node=4 \
+    tools/train.py --config configs/infant_skeleton_v2.yaml
+```
+
+### Evaluation
+
+```bash
+# Evaluate on test set
+python tools/test.py \
+    --config configs/infant_skeleton_v2.yaml \
+    --checkpoint checkpoints/best_model.pth
+```
+
+### Inference Demo
+
+```bash
+# Run inference on a single image
+python tools/demo.py \
+    --image path/to/image.jpg \
+    --checkpoint checkpoints/best_model.pth \
+    --output results/
+
+# Run inference on video
+python tools/demo.py \
+    --video path/to/video.mp4 \
+    --checkpoint checkpoints/best_model.pth \
+    --output results/
+```
+
+## 📈 Results
+
+### Performance on Infant-Skeleton-V2
+
+| Method | Accuracy | PCK@0.2 | AUC | FPS |
+|--------|----------|---------|-----|-----|
+| SimpleBaseline | 87.2 | - | - | - |
+| HRNet | 89.5 | - | - | - |
+| ViTPose | 91.0 | - | - | - |
+| **Ours** | **93.8** | - | - | - |
+
+### Ablation Study
+
+| Component | Accuracy | Δ |
+|-----------|----------|---|
+| Baseline | 89.5 | - |
+| + Regression Head | 91.2 | +1.7 |
+| + VAMC | 92.6 | +1.4 |
+| + SCL | **93.8** | +1.2 |
+
+## 🔬 Method Details
+
+### Variance Alignment and Morphological Constraints (VAMC)
+
+The VAMC mechanism enforces data distribution consistency by penalizing spatial variance discrepancies across the coordinate regression error gradient:
+
+```
+L_VAMC = λ₁ · L_variance + λ₂ · L_morphology
+```
+
+### Shape Constraint Loss (SCL)
+
+The SCL combines soft-argmax with local Gaussian refinement to achieve sub-pixel precision:
+
+```
+L_SCL = ||p_pred - p_gt||₂ + α · L_shape
+```
+
 
 
 ## Project Structure

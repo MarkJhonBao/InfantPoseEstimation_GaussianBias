@@ -389,7 +389,4 @@ Following COCO keypoint evaluation protocol:
 
 This project is released under the Apache 2.0 License.
 
-## Acknowledgements
 
-- [MMPose](https://github.com/open-mmlab/mmpose)
-- [HRNet](https://github.com/HRNet/HRNet-Human-Pose-Estimation)

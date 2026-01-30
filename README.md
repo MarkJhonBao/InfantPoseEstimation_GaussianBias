@@ -8,7 +8,7 @@
 Official implementation of **"Robust Pose Estimation via Regression Correction and Gaussian Alignment for Preterm Infant Limb Movement Recognition"**.
 
 <p align="center">
-  <img src="assets/framework.png" width="90%">
+  <img src="examples/framework_1.png" width="90%">
 </p>
 
 ## 📋 Abstract
@@ -25,9 +25,8 @@ Our PI-LMR algorithm achieves an accuracy of **93.8%** on the Infant-Skeleton-V2
 - 🏥 **Clinical Application**: Enables early screening for postural abnormalities in NICU environments
 
 ## 🏗️ Architecture
-
 <p align="center">
-  <img src="assets/architecture.png" width="85%">
+  <img src="examples/framework_1.png" width="90%">
 </p>
 
 The model consists of three main stages:

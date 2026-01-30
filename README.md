@@ -309,8 +309,6 @@ cfg.train.lr = 5e-4
 | `heatmap_loss_weight` | 1.0 | Weight for heatmap loss |
 | `offset_loss_weight` | 1.0 | Weight for offset regression loss |
 | `variance_loss_weight` | 0.1 | Weight for variance alignment loss |
-
-
 ```
 
 **Key Features:**

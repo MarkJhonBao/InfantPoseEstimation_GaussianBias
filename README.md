@@ -1,6 +1,6 @@
 # Robust Pose Estimation for Preterm Infant Limb Movement Recognition
 
-[![Paper](https://img.shields.io/badge/Pattern Recognition-yellow)](https://doi.org/xxx)
+[![Paper](https://img.shields.io/badge/PatternRecognition-yellow)](https://doi.org/xxx)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/Python-3.8+-yellow.svg)](https://www.python.org/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-1.10+-red.svg)](https://pytorch.org/)

@@ -8,7 +8,7 @@
 Official implementation of **"Robust Pose Estimation via Regression Correction and Gaussian Alignment for Preterm Infant Limb Movement Recognition"**.
 
 <p align="center">
-  <img src="examples/framework_1.png" width="90%">
+  <img src="examples/Motivation_v3.png" width="90%">
 </p>
 
 ## 📋 Abstract

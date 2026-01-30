@@ -10,6 +10,9 @@ Official implementation of **"Robust Pose Estimation via Regression Correction a
 <p align="center">
   <img src="examples/Motivation_v3.png" width="90%">
 </p>
+<p align="center">
+  <img src="examples/test.gif" width="90%">
+</p>
 
 ## 📋 Abstract
 

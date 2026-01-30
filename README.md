@@ -5,7 +5,7 @@
 [![Python](https://img.shields.io/badge/Python-3.8+-yellow.svg)](https://www.python.org/)
 [![PyTorch](https://img.shields.io/badge/PyTorch-1.10+-red.svg)](https://pytorch.org/)
 
-Official implementation of **"Robust Pose Estimation via Regression Correction and Gaussian Alignment for Preterm Infant Limb Movement Recognition"** (Neural Networks 2026).
+Official implementation of **"Robust Pose Estimation via Regression Correction and Gaussian Alignment for Preterm Infant Limb Movement Recognition"**.
 
 <p align="center">
   <img src="assets/framework.png" width="90%">
